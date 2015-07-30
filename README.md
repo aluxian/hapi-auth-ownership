@@ -12,35 +12,59 @@ Simple authentication scheme to verify resource ownership. Clients must pass the
       - `isValid` - `true` if the client is granted access
       - `credentials` - a credentials object passed back to the application in `request.auth.credentials`; if you do not include this,
       the plugin will pass the previous credentials back to Hapi
-
-An `ownership-access` strategy should be used with a companion strategy such as [hapi-auth-basic](https://github.com/hapijs/hapi-auth-basic). The companion strategy runs before and performs request authentication. Once you know who (e.g. the owner of the resource or someone else) is making the request, you can allow or deny access.
+- `errorMessage` - (optional) the error message that will be sent on invalid requests; set to `You do not have access to this resource` by default
+- `companionStrategy` - (required) the strategy that will be used to retrieve `credentials`; this is required because ownership checks require a credentials object
 
 ```javascript
-server.register(require('hapi-auth-ownership'), function (err) {
-  server.auth.strategy('ownership', 'ownership-access', {
-    rules: {
-      account: function(request, credentials, callback) {
-        callback(null, request.params.id === credentials.account.id); // [1]
-      }
-    }
-  });
+var users = {
+  john: {
+    id: '123',
+    username: 'john',
+    password: 'secret'
+  }
+};
 
-  server.route({
-    method: 'DELETE',
-    path: '/account/{id}',
-    config: {
-      plugins: {
-        hapiAuthOwnership: {
-          ownershipRule: 'account' // [2]
+var validate = function(request, username, password, callback) {
+  var user = users[username];
+
+  if (!user) {
+    return callback(null, false);
+  }
+
+  callback(null, password === user.password, user);
+};
+
+server.register(require('hapi-auth-basic'), function(err) {
+  server.auth.strategy('simple', 'basic', { validateFunc: validate }); // [1]
+
+  server.register(require('hapi-auth-ownership'), function (err) {
+    server.auth.strategy('ownership', 'ownership-access', {
+      rules: {
+        account: function(request, credentials, callback) {
+          callback(null, request.params.id === credentials.account.id); // [2]
+        }
+      },
+      errorMessage: 'OOPS!', // [3]
+      companionStrategy: 'simple' // [4]
+    });
+
+    server.route({
+      method: 'DELETE',
+      path: '/account/{id}',
+      config: {
+        plugins: {
+          hapiAuthOwnership: {
+            ownershipRule: 'account' // [5]
+          }
         }
       }
-    }
+    });
   });
 });
 ```
 
-1. The authenticated user only has access to their own account.
-
-2. Specify the rule to use. This will be taken from the `options.rules` object. If you don't specify an `ownershipRule` the request will be validated => the client has access.
-
-When registering the plugin you can also specify `errorMessage`, which is the error message that will be sent on invalid requests. By default, it's set to `You do not have access to this resource`.
+1. Define the companion strategy.
+2. The authenticated user only has access to their own account.
+3. Custom error message.
+4. The credentials will be retrieved from this strategy.
+5. Specify the rule to use. This will be taken from the `options.rules` object. If you don't specify an `ownershipRule` the request will be validated => the client has access.
