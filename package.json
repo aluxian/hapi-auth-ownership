@@ -1,7 +1,7 @@
 {
   "name": "hapi-auth-ownership",
   "description": "Ownership-based access control for your routes.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "repository": "git@github.com:Aluxian/hapi-auth-ownership.git",
   "main": "lib/index.js",
   "keywords": [
